@@ -9,5 +9,5 @@ public class JpaBasicShopApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(JpaBasicShopApplication.class, args);
 	}
-
 }
+
