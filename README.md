@@ -66,4 +66,57 @@
 1-8. 연관관계 편의 메서드 </br>
 (1) 연관관계 편의 메서드의 경우 양방향 연관관계가 설정된 엔티티 간 데이터의 동기화를 위해 사용된다. </br></br>
 (2) 사용 시 코드의 가독성 향상, 연관관계를 변경해야 할 때 한쪽만 수정하면 된다는 장점 존재 </br></br>
-(3) 비즈니스의 핵심 로직이 존재하는 엔티티에 연관관계 메서드를 구현하는 것이 일반적이다. </br></br></br></br>
+(3) 비즈니스의 핵심 로직이 존재하는 엔티티에 연관관계 메서드를 구현하는 것이 일반적이다. </br></br></br></br></br></br>
+
+
+
+
+
+
+# 2. 도메인 개발, 테스트 </br>
+2-1 @Autowired</br>
+(1) 스프링이 Dependency injection 기능을 수행하기 위한 어노테이션 </br></br>
+
+(2) 일반적으로 스프링 빈으로 등록된 클래스이거나 @Component, @Service, @Repository, @Controller 등의 어노테이션으로 등록된 클래스, @Configuration으로 등록된 클래스 내부의 빈을
+주입시킬 수 있다.</br></br></br></br>
+
+
+
+
+
+2-2. @Transactional</br>
+(1) JPA의 모든 데이터 변경은 트랜잭션 내부에서 진행되어야 한다.</br></br>
+
+(2) @Transactional(readOnly = true) 어노테이션은 조회 서비스에서 성능을 최적화한다. 따라서 조회 메서드인 경우 해당 옵션을 추가해주면 좋다. </br></br></br></br>
+
+
+
+
+2-3. @AllArgsConstructor, @RequiredArgsConstructor </br>
+(1) 공통적으로 두 어노테이션은 Lombok 라이브러리에서 제공하는 기능으로, 생성자를 기본으로 만들어주는 기능이다.</br></br>
+
+(2) 차이점은, @AllArgsConstructor은 모든 필드를 파라미터로 받는 생성자를 만들고,  @RequiredArgsConstructor은 @NotNull 또는 final로
+선언된 필드만을 생성자의 파라미터로 받게 된다. 필드의 선언 방식에 따라 결정되는 파라미터들이 달라지는 것이 두 어노테이션의 차이점이라고 볼 수 있다. </br></br></br></br></br>
+
+
+
+
+
+2-4. 테스트 </br>
+(1) given / when / then</br>
+- given : ~이 주어질 때,
+- when : ~으로 처리하면,
+- then : ~한 결과가 예상된다.</br></br></br>
+
+
+(2) 테스트 과정에서 실제 사용하는 외부 DB가 아닌 완전히 격리된 환경인 In-memory DB를 사용하는 방법(스프링 부트)</br>
+- build.gradle에서 dependencies에 runtimeOnly 'com.h2database:h2' 필드가 존재하는 경우</br>
+- main이 아닌 test 디렉토리에 resource/application.yml을 생성한다.</br>
+- datasource/url 영역을 jdbc:h2:mem:test으로 설정하면 외부 데이터베이스가 없어도 인메모리 데이터베이스 환경에서 테스트를 할 수 있다.</br>
+- 만약 스프링 부트를 사용한다면 위와 같은 설정이 없어도 테스트를 인메모리 DB 환경에서 동작하도록 설계되어 있다.</br></br></br>
+
+
+
+(3) Assertions.assertEquals()</br>
+- 해당 메서드의 경우 테스트 프레임워크에서 사용되는 메서드로, 두 값을 비교하여 그 결과가 같은지 확인하는 데 사용된다.
+  이 메서드는 예상 값(expected value)과 실제 값(actual value)을 비교하여 두 값이 동일한지 확인하고, 만약 값이 다르다면 테스트가 실패하게 된다.</br></br></br>
