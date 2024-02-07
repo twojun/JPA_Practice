@@ -25,7 +25,7 @@ body {
 .footer {
     padding-top: 19px;
     color: #777;
-border-top: 1px solid #e5e5e5;
+    border-top: 1px solid #e5e5e5;
 }
 /* Customize container */
 @media (min-width: 768px) {
@@ -60,7 +60,6 @@ border-top: 1px solid #e5e5e5;
     .footer {
         padding-left: 0;
         padding-right: 0;
-
     }
     /* Space out the masthead */
     .header {
