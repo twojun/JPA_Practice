@@ -1,4 +1,4 @@
-# 1. 엔티티 설계, 주의사항</br>
+# 1. 엔티티 설계, 주의사항 - (내용 수정 필요)</br> 
 1-1. 외래 키를 보유한 곳을 연관관계의 주인으로 설정한다.</br>
 (1) Reference : https://github.com/twojun/ex1-hello-jpa</br></br></br></br>
 
