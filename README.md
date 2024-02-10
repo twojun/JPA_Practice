@@ -87,7 +87,8 @@
 2-2. @Transactional</br>
 (1) JPA의 모든 데이터 변경은 트랜잭션 내부에서 진행되어야 한다.</br></br>
 
-(2) @Transactional(readOnly = true) 어노테이션은 조회 서비스에서 성능을 최적화한다. 따라서 조회 메서드인 경우 해당 옵션을 추가해주면 좋다. </br></br></br></br>
+(2) @Transactional(readOnly = true) 어노테이션은 조회 서비스에서 성능을 최적화한다. Service 계층에서 우선 해당 어노테이션을 
+@Transactional(readOnly = true)으로 주고, 단순 조회가 아닌 메서드에  @Transactional 어노테이션을 별도로 추가한다. </br></br></br></br>
 
 
 
@@ -208,8 +209,50 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
 
 
 
-3-3. JPA에서 수정은 변경 감지(Dirty checking)를 사용하는 방법이 Best practice이다.</br>
+3-4. (중요) JPA에서 수정은 변경 감지(Dirty checking)를 사용하는 방법이 Best practice이다.</br>
 (1) 참고로 특정 엔티티에 대한 ID값은 항상 조심해야 한다.
 - @PathVariable로 바인딩 받은 아이디 값이 임의적으로 조작되어 넘겨받을 수도 있다. 이를 대비하기 위해 해당 아이디가
-  서비스 계층의 앞단이나 뒷단에서 유저가 해당 엔티티에 대한 권한이 있는지 체크하는 로직이 서버사이드에 존재해야 한다. </br></br>
+  서비스 계층의 앞단이나 뒷단에서 유저가 해당 엔티티에 대한 권한이 있는지 체크하는 로직이 서버사이드에 존재해야 한다. </br></br></br>
 
+
+(2) 변경감지와 병합(Dirth checking & merge) : 실무에서 em.merge()는 거의 사용되지 않는다. JPA에서 허용하고 있는 데이터 수정 방법?</br>
+- 변경감지와 병합의 차이를 이해하는 것이 중요, </br></br>
+
+- 준영속 엔티티란? : 영속성 컨텍스트에서 더 이상 관리되지 않는 엔티티를 의미 </br></br>
+- 엔티티를 업데이트(수정)하는 로직의 경우 해당 엔티티 객체는 이미 데이터베이스에 저장되어서 JPA에서 인식할 수 있는 identifier가 존재하는 상태이다.
+  엔티티 수정을 위해 아래 코드와 같이 임의로 생성한 엔티티더라도 기존 식별자를 가지고 있다면 준영속 상태의 엔티티로 볼 수 있다. </br>
+  
+      @PostMapping("/items/{itemId}/edit")
+      public String updateItem(@PathVariable("itemId") Long itemId, @ModelAttribute("form") BookForm form) {
+          Book book = new Book();
+          book.setId(form.getId());
+          book.setName(form.getName());
+          book.setPrice(form.getPrice());
+          book.setStockQuantity(form.getStockQuantity());
+          book.setAuthor(form.getAuthor());
+          book.setIsbn(form.getIsbn());
+
+          itemService.saveItem(book);
+          return "redirect:/items";
+      }
+
+
+(3) 준영속 엔티티를 수정하는 방법?
+- 총 두 가지 존재 : 변경 감지(Dirty checking), 병합(Merge) </br></br></br>
+
+
+(4) 변경 감지 사용</br>    
+
+    @Transactional
+      public void updateItem(Long itemId, Book param) {
+          Item findItem = itemRepository.findOne(itemId);  // 식별자를 기반으로 실제 영속 상태의 엔티티를 조회
+          findItem.setPrice(param.getPrice());
+          findItem.setName(param.getName());
+          findItem.setStockQuantity(param.getStockQuantity());
+
+          // @Transactional 어노테이션에 의해 메서드 종료 시점 커밋이 발생
+          // 필드 데이터의 변화를 확인하여 변경 감지 발생
+      }
+
+- find(조회) 메서드를 통해 엔티티를 조회하면 영속성 컨텍스트에서 관리된다. 이때 데이터를 수정한다.
+  트랜잭션 내부이므로 엔티티 조회 후 내부 데이터 변경 > 메서드 종료 시점에 트랜잭션이 커밋되며 변경감지가 작동하여 UPDATE SQL를 보내게 된다.
