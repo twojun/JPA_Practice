@@ -1,4 +1,4 @@
-# 1. 엔티티 설계, 주의사항 - (내용 수정 필요)</br> 
+# 1. 엔티티 설계, 주의사항 </br> 
 1-1. 외래 키를 보유한 곳을 연관관계의 주인으로 설정한다.</br>
 (1) Reference : https://github.com/twojun/ex1-hello-jpa</br></br></br></br>
 
@@ -172,7 +172,7 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
 
 
 
-3-2. Model, @ModelAttribute, @PathVariable</br>
+3-2. Model, @ModelAttribute, @PathVariable, @RequestParam, @RequestBody</br>
 (1) Model </br>
 - View, Controller 간의 데이터 전달을 위해 사용되는 객체 </br>
 - 주로 Controller에서 View 영역으로 데이터를 전달할 때 사용한다. </br>
@@ -181,13 +181,23 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
 (2) @ModelAttribute </br>
 - Controller의 메서드 매개변수에 사용되는 어노테이션  </br></br>
 - 메서드 매개변수에 해당 어노테이션 지정 시, 관련 객체를 자동으로 생성하고 요청 파라미터를 바인딩하여 전달한다. </br>
-- 폼 입력값을 받거나 View -> Controller로 데이터 전달 시 사용 </br>
+- 폼 입력값을 받거나 Controller로 -> View 데이터 전달 시 사용 </br>
 - 주로 해당 어노테이션을 사용해 Controller에서 Model 객체를 생성하고 초기화하게 된다. </br></br></br>
 
 (3) @PathVariable</br>
 - 요청 URL 경로 변수를 바인딩할 때 사용된다. </br>
 - 경로 변수를 메서드 매개변수로 전달받아 Controller에서 사용할 수 있도록 함 </br>
-- RESTful API에서 resource identifier를 전달할 때 사용한다. </br></br></br></br></br>
+- RESTful API에서 resource identifier를 전달할 때 사용한다. </br></br></br>
+
+(4) @RequestParam </br>
+- HTTP 요청의 쿼리 파라미터나 폼 데이터를 메서드의 파라미터로 바인딩할 때 사용한다 </br>
+- URL에 포함된 쿼리 스트링, HTML For 데이터를 주로 처리할 때 사용 </br></br></br>
+
+(5) @RequestBody </br>
+- HTTP 요청의 바디를 메서드의 파라미터로 바인딩할 때 사용한다.</br>
+- 주로 JSON, XML 형식의 데이터를 전달할 때 사용한다.</br>
+- HTTP Request의 Content-type 헤더에 따라 알맞은 메시지 컨버터를 적용하여 요청 바디를 지정된 타입으로 변환한다. </br></br></br></br></br>
+
 
 
 
@@ -220,7 +230,10 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
 
 - 준영속 엔티티란? : 영속성 컨텍스트에서 더 이상 관리되지 않는 엔티티를 의미 </br></br>
 - 엔티티를 업데이트(수정)하는 로직의 경우 해당 엔티티 객체는 이미 데이터베이스에 저장되어서 JPA에서 인식할 수 있는 identifier가 존재하는 상태이다.
-  엔티티 수정을 위해 아래 코드와 같이 임의로 생성한 엔티티더라도 기존 식별자를 가지고 있다면 준영속 상태의 엔티티로 볼 수 있다. </br>
+  엔티티 수정을 위해 아래 코드와 같이 임의로 생성한 엔티티더라도 기존 식별자를 가지고 있다면 준영속 상태의 엔티티로 볼 수 있다. </br></br>
+
+- 설명상 편의를 위해 setter()를 사용했다 하지만 아래에서 엔티티의 핵심 비즈니스 로직인 상품 수정을 엔티티 내부에 포함된 핵심 메서드를 통해 값을
+  변경하는 부분에 대한 코드를 보여드리겠다. 
   
       @PostMapping("/items/{itemId}/edit")
       public String updateItem(@PathVariable("itemId") Long itemId, @ModelAttribute("form") BookForm form) {
@@ -253,6 +266,92 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
           // @Transactional 어노테이션에 의해 메서드 종료 시점 커밋이 발생
           // 필드 데이터의 변화를 확인하여 변경 감지 발생
       }
-
+- 위의 코드보단 DTO를 써서 코드가 줄었지만 아직 setter가 사용되고 있다. 아래에서 더 줄여보도록 하자.</br>
 - find(조회) 메서드를 통해 엔티티를 조회하면 영속성 컨텍스트에서 관리된다. 이때 데이터를 수정한다.
-  트랜잭션 내부이므로 엔티티 조회 후 내부 데이터 변경 > 메서드 종료 시점에 트랜잭션이 커밋되며 변경감지가 작동하여 UPDATE SQL를 보내게 된다.
+  트랜잭션 내부이므로 엔티티 조회 후 내부 데이터 변경 > 메서드 종료 시점에 트랜잭션이 커밋되며 변경감지가 작동하여 UPDATE SQL를 보내게 된다.</br></br></br>
+
+
+  (5) 병합(Merge)</br>
+  - 병합은 준영속 상태의 엔티티를 영속 상태로 변경할 때 사용하는 기능이다. </br>
+  - 영속 엔티티의 값을 준영속 엔티티의 값으로 모두 바꾼다.(병합한다)</br>
+  - 트랜잭션 커밋 시점에 변경 감지가 발생해서 데이터베이스로 UPDATE SQL이 전달된다. </br></br></br>
+
+
+  (6) 실무에서는 변경 감지를 사용하는 것이 좋다. </br>
+  - 변경 감지를 사용하면 원하는 필드만 부분적으로 수정 가능하지만 병합 사용 시 모든 필드가 변경된다.
+    실무에서는 보통 업데이트 기능이 거의 제한적이고 심지어 병합 과정에서 필드가 null일 경우 null로 업데이트될 수도 있다. (병합 특성상 모든 필드를 업데이트하기 때문)
+    또한 변경 가능한 데이터만 노출하기 때문에 병합을 사용하는 것이 오히려 번거로운 편이다.</br>
+
+  - 엔티티 변경 시 변경 감지를 사용하도록 한다. </br></br></br>
+
+        @Transactional
+        public void updateItem2(Long itemId, UpdateItemDto itemDto) {
+            Item findItem = itemRepository.findOne(itemId);  // 식별자를 기반으로 실제 영속 상태의 엔티티를 조회
+            findItem.itemModify(itemDto.getPrice(), itemDto.getName(), itemDto.getStockQuantity());
+
+            // @Transactional 어노테이션에 의해 메서드 종료 시점 커밋이 발생
+            // 필드 데이터의 변화를 확인하여 변경 감지 발생
+        }
+
+  (4)번 변경 감지를 설명할 때 코드처럼 setter를 남발하는 것이 아닌 의미있는 비즈니스 메서드를 만들어서 데이터를 변경하도록 한다. </br>
+  - 위의 코드처럼 트랜잭션이 존재하는 서비스 계층에 엔티티 식별자, 변경할 데이터를 보낼 때 DTO나 파라미터에 의해 명확하게 전달한다.</br>
+  - 위의 코드처럼 트랜잭션이 존재하는 서비스 계층에서 영속 상태의 엔티티를 조회하고 엔티티의 데이터를 직접 변경하도록 한다.</br>
+  - 트랜잭션 커밋 시점에 변경 감지가 발생하게 되어 업데이트 쿼리가 전송된다. </br></br></br>
+    
+
+
+  (7) 추가적으로 엔티티 필드 수정 시 의미있는 메서드를 생성한다. </br>
+  - setter를 막 열어서 값을 함부로 수정하면 안 된다. 데이터 변경이 필요할 경우 의미있는 메서드를 별도로 만들어서
+    변경 지점이 엔티티 레벨로 올 수 있도록 해줘야 한다. setter를 함부로 사용하면 이후 코드 추적이 어려워지는 단점이 드러난다. </br></br></br></br>
+
+
+
+
+
+3-8. 커맨드성 (주문 등)은 컨트롤러 레벨에서 식별자만 전달, 실제 핵심 비즈니스가 담겨져 있는 서비스 계층에서 커맨드성 작업 진행</br>
+(1) 이렇게 되면 트랜잭션 내부에서 엔티티 조회 시 영속 상태로 작업을 수행할 수 있게 된다.</br>
+
+
+    @PostMapping("/order")
+      public String order(@RequestParam("memberId") Long memberId,
+                          @RequestParam("itemId") Long itemId,
+                          @RequestParam("count") int count) {
+
+          orderService.order(memberId, itemId, count);
+          return "redirect:/orders";
+      }
+</br>
+
+    @Transactional
+      public Long order(Long memberId, Long itemId, int count) {
+          // 주문자, 관련 상품 (엔티티) 조회
+          Member member = memberRepository.findOne(memberId);
+          Item item = itemRepository.findOne(itemId);
+
+          // 배송정보 생성
+          Delivery delivery = new Delivery();
+          delivery.setAddress(member.getAddress());
+
+          // 주문상품 생성
+          OrderItem orderItem = OrderItem.createOrderItem(item, item.getPrice(), count);
+
+          // 주문 생성
+          Order order = Order.createOrder(member, delivery, orderItem);
+
+          // 주문 저장
+          orderRepository.save(order);
+          return order.getId();
+      }
+      
+(2) 위처럼 단순 조회가 아닌 핵심 비즈니스 로직을 수행해야 한다면 컨트롤러에서 식별자만 넘겨주고 핵심 비즈니스 로직을 트랜잭션 내부(주로 서비스 계층)에서 수행하도록 코드를 구성한다. </br></br>
+
+
+    @Transactional(readOnly = true)
+    public List<Order> findOrders(OrderSearch orderSearch) {
+        return orderRepository.findAllByString(orderSearch);
+    }
+(3) 위와 같이 서비스 계층에서 단순히 조회를 위해 Repository에 접근하는 거라면(단순 위임 상태), 바로 서비스 계층에서 Repository에 대한 접근을 바로 호출한다.</br></br></br>
+
+
+  
+
