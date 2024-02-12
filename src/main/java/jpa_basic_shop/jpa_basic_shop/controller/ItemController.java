@@ -1,10 +1,13 @@
 package jpa_basic_shop.jpa_basic_shop.controller;
 
+import jakarta.validation.Valid;
 import jpa_basic_shop.jpa_basic_shop.domain.item.Book;
 import jpa_basic_shop.jpa_basic_shop.service.ItemService;
+import jpa_basic_shop.jpa_basic_shop.service.UpdateItemDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,11 +22,15 @@ public class ItemController {
     @GetMapping("/items/new")
     public String createForm(Model model) {
         model.addAttribute("form", new BookForm());
-        return "/items/createItemForm";
+        return "items/createItemForm";
     }
 
     @PostMapping("/items/new")
-    public String create(BookForm form) {
+    public String create(@Valid BookForm form, BindingResult result) {
+        if (result.hasErrors()) {
+            return "items/createItemForm";
+        }
+
         Book book = new Book();
         book.setName(form.getName());
         book.setPrice(form.getPrice());
@@ -57,17 +64,15 @@ public class ItemController {
         return "/items/updateItemForm";
     }
 
-    @PostMapping("/items/{itemId}/edit")
-    public String updateItem(@PathVariable("itemId") Long itemId, @ModelAttribute("form") BookForm form) {
-        Book book = new Book();
-        book.setId(form.getId());
-        book.setName(form.getName());
-        book.setPrice(form.getPrice());
-        book.setStockQuantity(form.getStockQuantity());
-        book.setAuthor(form.getAuthor());
-        book.setIsbn(form.getIsbn());
+//    @PostMapping("/items/{itemId}/edit")
+//    public String updateItem(@PathVariable("itemId") Long itemId, @ModelAttribute("form") BookForm form) {
+//        itemService.updateItem(itemId, form.getName(), form.getPrice(), form.getStockQuantity());
+//        return "redirect:/items";
+//    }
 
-        itemService.saveItem(book);
+    @PostMapping("/items/{itemId}/edit")
+    public String updateItem2(@PathVariable("itemId") Long itemId, @ModelAttribute("form") UpdateItemDto itemDto) {
+        itemService.updateItem2(itemId, itemDto);
         return "redirect:/items";
     }
 }

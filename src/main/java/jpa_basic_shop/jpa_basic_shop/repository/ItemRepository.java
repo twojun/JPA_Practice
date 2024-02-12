@@ -1,6 +1,7 @@
 package jpa_basic_shop.jpa_basic_shop.repository;
 
 import jakarta.persistence.EntityManager;
+import jpa_basic_shop.jpa_basic_shop.domain.item.Book;
 import jpa_basic_shop.jpa_basic_shop.domain.item.Item;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -27,6 +28,12 @@ public class ItemRepository {
 
     public List<Item> findAll() {
         return em.createQuery("select i from Item i", Item.class)
+            .getResultList();
+    }
+
+    // isbn 조회
+    public List<Book> findAllIsbn() {
+        return em.createQuery("select b.isbn from Book b", Book.class)
                 .getResultList();
     }
 }

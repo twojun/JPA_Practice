@@ -30,6 +30,12 @@ public abstract class Item {
      * 도메인 주도 설계 : 도메인에 대한 직접적인 필드를 가지고 있는 곳(엔티티)에서
      * 비즈니스 로직을 설계하는 것이 응집도가 높은 설계 방법
      */
+    public void itemModify(int price, String name, int stockQuantity) {
+        this.price = price;
+        this.name = name;
+        this.stockQuantity = stockQuantity;
+    }
+
     public void addStock(int quantity) {
         this.stockQuantity += quantity;  // 재고 수량 증가
     }

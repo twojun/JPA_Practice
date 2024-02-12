@@ -22,11 +22,20 @@ public class ItemService {
     }
 
     @Transactional
-    public void updateItem(Long itemId, Book param) {
+    public void updateItem(Long itemId, String name, int price, int stockQuantity) {
         Item findItem = itemRepository.findOne(itemId);  // 식별자를 기반으로 실제 영속 상태의 엔티티를 조회
-        findItem.setPrice(param.getPrice());
-        findItem.setName(param.getName());
-        findItem.setStockQuantity(param.getStockQuantity());
+        findItem.setPrice(price);
+        findItem.setName(name);
+        findItem.setStockQuantity(stockQuantity);
+
+        // @Transactional 어노테이션에 의해 메서드 종료 시점 커밋이 발생
+        // 필드 데이터의 변화를 확인하여 변경 감지 발생
+    }
+
+    @Transactional
+    public void updateItem2(Long itemId, UpdateItemDto itemDto) {
+        Item findItem = itemRepository.findOne(itemId);  // 식별자를 기반으로 실제 영속 상태의 엔티티를 조회
+        findItem.itemModify(itemDto.getPrice(), itemDto.getName(), itemDto.getStockQuantity());
 
         // @Transactional 어노테이션에 의해 메서드 종료 시점 커밋이 발생
         // 필드 데이터의 변화를 확인하여 변경 감지 발생
@@ -38,5 +47,9 @@ public class ItemService {
 
     public Item findOne(Long id) {
         return itemRepository.findOne(id);
+    }
+
+    public List<Book> findIsbn() {
+        return itemRepository.findAllIsbn();
     }
 }
