@@ -77,8 +77,8 @@
 2-1 @Autowired</br>
 (1) 스프링이 Dependency injection 기능을 수행하기 위한 어노테이션 </br></br>
 
-(2) 일반적으로 스프링 빈으로 등록된 클래스이거나 @Component, @Service, @Repository, @Controller 등의 어노테이션으로 등록된 클래스, @Configuration으로 등록된 클래스 내부의 빈을
-주입시킬 수 있다.</br></br></br></br>
+(2) @Autowired를 통해 외부 클래스가 빈을 주입받기 위해선 주입 클래스들은 일반적으로 스프링 빈으로 등록된 클래스이거나 또는
+@Component, @Service, @Repository, @Controller 등의 어노테이션이 적용, 또는 @Configuration으로 등록된 클래스들을 주입시킬 수 있다.</br></br></br></br>
 
 
 
@@ -194,7 +194,7 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
 - URL에 포함된 쿼리 스트링, HTML For 데이터를 주로 처리할 때 사용 </br></br></br>
 
 (5) @RequestBody </br>
-- HTTP 요청의 바디를 메서드의 파라미터로 바인딩할 때 사용한다.</br>
+- HTTP 요청 바디를 메서드의 파라미터로 바인딩할 때 사용한다.</br>
 - 주로 JSON, XML 형식의 데이터를 전달할 때 사용한다.</br>
 - HTTP Request의 Content-type 헤더에 따라 알맞은 메시지 컨버터를 적용하여 요청 바디를 지정된 타입으로 변환한다. </br></br></br></br></br>
 
@@ -350,8 +350,60 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
     public List<Order> findOrders(OrderSearch orderSearch) {
         return orderRepository.findAllByString(orderSearch);
     }
-(3) 위와 같이 서비스 계층에서 단순히 조회를 위해 Repository에 접근하는 거라면(단순 위임 상태), 바로 서비스 계층에서 Repository에 대한 접근을 바로 호출한다.</br></br></br>
+(3) 위와 같이 서비스 계층에서 단순히 조회를 위해 Repository에 접근하는 거라면(단순 위임 상태), 바로 서비스 계층에서 Repository에 대한 접근을 바로 호출한다.</br></br></br></br></br></br></br>
 
+
+
+
+
+
+
+# 4. API 개발</br> 
+4-1. API</br>
+(1) 최근에는 프론트엔드에서 SPA(Single Page Application) 형식으로 React.js를 통해 View 영역을 개발하고 있다. 이런 경우에는 백엔드 입장에서 뭔가 예전처럼
+서버사이드에서 HTML을 렌더링할 일이 많진 않다. 이러한 작업들은 프론트엔드, 앱 개발 진영에서 해결한다</br>
+
+(2) 모놀리식 아키텍처에서 마이크로서비스 아키텍처로 많이 변화하고, 다양한 클라이언트(프론트엔드, 앱) 원활한 통신, 마이크로서비스 자체 간의 통신 등을 
+위해 최근에는 API로 통신할 일이 더욱 늘어나게 되었다. </br>
+
+(3) 따라서 API를 잘 설계하고 개발하는 것이 중요하다. </br>
+
+(4) JPA를 사용하면서 API를 설계하는 부분이 기존 SQL을 가지고 설계하는 방식과 다르기 때문에 이 부분에 대해 올바른 방법인지 정리해 보고자 한다. </br></br></br></br> </br>
+
+
+
+
+
+4-2. 관련 어노테이션들
+(1) @RequestBody </br>
+- HTTP 요청 바디를 메서드의 파라미터로 바인딩할 때 사용한다.</br>
+- 주로 JSON, XML 형식의 데이터를 전달할 때 사용한다.</br>
+- HTTP Request의 Content-type 헤더에 따라 알맞은 메시지 컨버터를 적용하여 요청 바디를 지정된 타입으로 변환한다.</br></br></br></br> </br>
+
+
+
+
+4-3. 엔티티를 그대로 노출할 때 생기는 문제들 </br>
+
+    @PostMapping("/api/v1/members")
+    public CreateMemberResponse saveMemberV1(@RequestBody @Valid Member member) {
+        Long id = memberService.join(member);
+        return new CreateMemberResponse(id);
+    }
+(1) 특정한 영역을 위한(화면 등) 필드 validation을 위해 엔티티에 모두 넣어줘야 하는 문제</br>
+- 특정한 api에서는 validation이 필요하지 않을 수도 있는데 이미 원본 엔티티에 validation 로직을 넣은 것.</br></br> </br>
+
+
+(2) 엔티티의 스펙이 변경되는 경우, API 스펙까지 변경된다. 엔티티를 외부에 노출시키지 않는다.</br>
+- 이 경우 엔티티의 필드를 변경해 버려서 API 스펙이 변해버리는 것이 문제가 된다. </br>
+- 엔티티라는 것은 굉장히 여러 곳에서 사용될 수 있기 때문에 변경될 확률이 높다. 이를 통해 API 스펙까지 변경되고 엔티티와 API 자체가 1:1로 강하게 결합되어 버리는 것. </br>
+- 결론적으로는 API 스펙을 위한 별도의 DTO(Data Transfer Object)를 설계하는 것이 좋다. </br> 
+- 특히 API를 설계할 때는 요청과 응답 모두 엔티티를 사용하지 않고 DTO를 사용해 요청과 응답을 처리한다. </br> </br>
+
+- 추가적으로 실무에서는 동일한 엔티티에 대해 API 용도에 따라 조금씩 달라지는 스펙을 요구하는 일이 많다. 한 엔티티에 각각의 API를 위한
+  응답 로직을 담기는 어렵다.</br></br>
+
+- 컬렉션을 직접 반환하면 향후 API 스펙을 반환하기 어렵다.
 
   
 
