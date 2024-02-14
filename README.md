@@ -368,7 +368,13 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
 
 (3) 따라서 API를 잘 설계하고 개발하는 것이 중요하다. </br>
 
-(4) JPA를 사용하면서 API를 설계하는 부분이 기존 SQL을 가지고 설계하는 방식과 다르기 때문에 이 부분에 대해 올바른 방법인지 정리해 보고자 한다. </br></br></br></br></br>
+(4) JPA를 사용하면서 API를 설계하는 부분이 기존 SQL을 가지고 설계하는 방식과 다르기 때문에 이 부분에 대해 올바른 방법인지 정리해 보고자 한다. </br></br>
+
+(5) 기타 라이브러리 : 스프링 부트 3.0 이상) Hibernate5JakartaModule
+- 엔티티 간 LAZY 전략이 걸린 경우 엔티티를 조회할 때 연관 엔티티는 프록시 객체로 끌고 온다. 스프링 부트의 경우 REST API를 Json 형태로 반환하는 데
+  이 과정에서 Jackson 라이브러리가 사용된다. 프록시 객체는 영속화되어 있지 않아서 Jackson 라이브러리가 이를 직렬화하여 json으로 반환 시에는 문제가 생긴다.
+  이때 Hibernate5JakartaModule 라이브러리를 사용해서 하이버네이트가 제공하는 기능을 jackson 라이브러리가 이해할 수 있는 형태로 변환하는 역할을 수행하게 된다.
+  이를 통해 하이버네이트가 로딩한 프록시 객체에 대해서도 해당 객체를 직렬화하여 json 형태로 반환될 수 있도록 도와준다. </br></br></br></br></br>
 
 
 
@@ -412,7 +418,7 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
 
 
 
-# 5. 지연 로딩(Lazy Loading)과 조회 성능 최적화 </br> 
+# 5. 지연 로딩(Lazy Loading)과 조회 성능 최적화 : @XToOne </br> 
 ## 5-1. 개요 
 (1) 실무에서 여러 테이블들을 JOIN하며 API가 생성된다. 이러한 과정에서 어떻게 성능까지 챙길 수 있는지, 페이징 처리같은 것들을 포함해
 성능 문제들을 어떻게 해결할 수 있는지 확인해 보고자 한다.</br> 
@@ -430,7 +436,179 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
 (3) 추가적으로 지연 로딩(LAZY)을 피하기 위해 즉시 로딩(EAGER)으로 전략을 변경하지 말아야 한다. EAGER의 경우 연관관계로 맺어져 있는
 데이터가 필요한 상황이 아닐 때에도 해당 엔티티의 데이터를 가져오기 때문에 성능 문제가 발생할 수 있다. </br></br>
 
-(4) EAGER는 성능 튜닝에 큰 어려움을 주기 때문에 항상 LAZY를 기본으로 하고 성능 최적화가 필요한 경우 FETCH JOIN을 활용한다. </br></br></br></br></br>
+(4) EAGER는 성능 튜닝에 큰 어려움을 주기 때문에 항상 LAZY를 기본으로 하고 성능 최적화가 필요한 경우 FETCH JOIN을 활용한다. </br></br>
+
+(5) fetch join은 JPA에서 제공하는 성능 최적화 방법으로, 특정 엔티티를 조회할 때 연관관계로 맺어진 엔티티를 프록시 객체로 조회하는 것이 아니라 
+실제 데이터베이스에 쿼리를 통해 연관 엔티티를 모두 끌고 오고 Persistence context의 1차 캐시에 저장해둔다. 이를 통해 조회된 엔티티들의 
+데이터가 필요할 경우 1차 캐시를 바로 참조하기 때문에 추가적인 쿼리가 발생하지 않는다.</br></br></br></br></br>
+
+
+
+
+## 5-3. 기본 전략은 LAZY, 여러 엔티티를 한 번에 가져와야 하는 경우 FETCH JOIN을 사용한다. </br>
+[case 1 : 엔티티 조회 이후에 엔티티를 DTO로 변환하는 경우]</br>
+
+    public List<Order> findAllWithMemberDelivery() {
+          return em.createQuery("select o from Order o " +
+                                          "join fetch o.member m " +
+                                          "join fetch o.delivery d", Order.class)
+                  .getResultList();
+    }
+    
+
+    @GetMapping("/api/v3/simple-orders")
+    public List<SimpleOrderDto> ordersV3() {
+        List<Order> orders = orderRepository.findAllWithMemberDelivery();
+
+        return orders.stream()
+                .map(order -> new SimpleOrderDto(order))
+                .collect(Collectors.toList());
+    }
+
+(1) 기본 로딩 전략을 lazy, 이후 여러 엔티티 필요 시 해당 부분에 fetch join을 적용하여 엔티티 그래프를 한 번에 묶어서 가져오면
+대부분의 성능 문제를 해결해 볼 수 있다. </br></br></br>
+
+
+    2024-02-14T16:13:24.280+09:00 DEBUG 10257 --- [nio-8080-exec-3] org.hibernate.SQL                        : 
+        select
+            o1_0.order_id,
+            d1_0.delivery_id,
+            d1_0.city,
+            d1_0.street,
+            d1_0.zipcode,
+            d1_0.status,
+            m1_0.member_id,
+            m1_0.city,
+            m1_0.street,
+            m1_0.zipcode,
+            m1_0.name,
+            o1_0.order_date,
+            o1_0.status 
+        from
+            orders o1_0 
+        join
+            member m1_0 
+                on m1_0.member_id=o1_0.member_id 
+        join
+            delivery d1_0 
+                on d1_0.delivery_id=o1_0.delivery_id
+                
+(2) 위와 같이 엔티티를 fetch join해서 쿼리 한 번으로 조회할 수 있다. </br>
+
+(3) Fetch join으로 order를 select하는 과정에서 order -> member, order -> delivery는 이미 조회된 상태이므로 LAZY LOADING이 발생하지 않는다.</br>
+
+(4) 해당 코드의 경우 코드를 작성하기 쉽고 재사용성이 높다는 특징이 있다.</br> </br> </br>
+
+
+
+[case 2 : DTO를 바로 조회하는 경우]</br>
+
+       public List<OrderSimpleQueryDto> findOrderDto() {
+            return em.createQuery("select new jpa_basic_shop.jpa_basic_shop.dto.OrderSimpleQueryDto(o.id, m.name, o.orderDate, o.status, d.address) " +
+                                            "from Order o " +
+                                            "join o.member m " +
+                                            "join o.delivery d", OrderSimpleQueryDto.class)
+                    .getResultList();
+      }
+  
+        @GetMapping("/api/v4/simple-orders")
+        public List<OrderSimpleQueryDto> ordersV4() {
+            return orderRepository.findOrderDto();
+        }
+</br>
+
+        
+(1) 조회 결과 
+
+    2024-02-14T17:53:29.246+09:00 DEBUG 15538 --- [nio-8080-exec-2] org.hibernate.SQL                        : 
+      select
+          o1_0.order_id,
+          m1_0.name,
+          o1_0.order_date,
+          o1_0.status,
+          d1_0.city,
+          d1_0.street,
+          d1_0.zipcode 
+      from
+          orders o1_0 
+      join
+          member m1_0 
+              on m1_0.member_id=o1_0.member_id 
+      join
+          delivery d1_0 
+              on d1_0.delivery_id=o1_0.delivery_id
 
   
+(2) case2의 방식은 일반적인 쿼리를 사용할 때처럼 원하는 값을 프로젝션에 넣어 직접 조회한다. </br>
+(3) new 명령어로 JPQL의 결과를 DTO로 즉시 변환했다. </br>
+(4) 프로젝션에 원하는 데이터를 넣어 조회한다는 장점이 있다. </br>
+(5) Repository 재사용 관점에서 좋지 않다. Repository에 API 스펙을 위한 코드가 직접적으로 들어가기 때문이다. </br></br></br></br></br>
+
+
+
+
+
+## 5-4. CASE1, CASE2 정리 </br>
+(1) Repository는 순수히 엔티티를 조회하거나 엔티티 객체 그래프 조회를 최적화하는 데 사용해야 한다. </br></br>
+
+
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/b2ab10eb-0d7f-4d5d-83c3-a5852cb6de54)</br>
+(2) 이런 경우 repository 디렉토리 하위에 최적화를 위한 새로운 디렉토리를 생성하고 별도의 클래스를 만든다.</br></br>
+
+
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/318b3a07-95c1-4ecd-9bd4-0b1ef513d405)</br>
+(3) 생성한 클래스에 DTO를 바로 조회하는 코드를 작성한다. </br></br>
+
+
+(4) 정리 
+- 엔티티를 DTO로 변환하거나 DTO로 직접 조회하는 방식은 Trade-off가 존재한다. </br>
+- 각각의 장단점이 명확하기 때문에 상황에 맞는 방법을 채택해서 사용한다. </br>
+
+- 우선 엔티티를 DTO로 변환하는 방법을 선택 </br>
+- 필요하다면 FETCH JOIN을 활용해 성능을 최적화한다. </br>
+- 이 방법으로 해결되지 않는다면 DTO를 바로 조회하는 방법을 채택해 본다. </br>
+- 이 부분까지 와도 해결이 되지 않는다면 JPA가 제공하는 Native SQL이나 Spring JDBCTemplate으로 SQL을 직접 사용한다. </br></br></br></br></br></br></br>
+
+
+
+
+
+
+
+# 6. 컬렉션 조회 최적화 : OneToMany </br>
+## (참고) 6-1. JPA에서 ManyToMany를 적용하지 않는 이유?</br>
+- 데이터베이스에서 n:m 설계 측면에서는 ManyToMany 연관관계가 사용될 수 있지만 JPA에서는 일반적으로 권장되지 않는데 이유는 아래와 같이 정리해볼 수 있다.</br></br>
+
+(1) 복잡성 증가 
+- ManyToMany를 관리하기 위한 중간 테이블을 추가해 줘야 하며 중간 테이블에는 양측 엔티티를 관리하기 위한 주요 키가 포함되기 때문에
+데이터베이스 스키마가 오히려 복잡해지는 문제를 갖고 있다.</br></br>
+
+(2) 관리의 어려움
+- 중간 테이블은 양측 엔티티와 연관이 없다. 중간 테이블을 위한 추가적인 로직이 필요해지는데 이 부분이 유지보수에 어려움을 준다.</br></br>
+
+(3) 중간 테이블로 인한 성능 저하 
+- ManyToMany는 중간 테이블을 통해 해결되기 때문에 양측 엔티티에 접근할 때마다 중간 테이블을 거쳐야 하기 때문에 대규모 시스템 에선 성능저하가 발생할 수 있다. </br></br></br></br></br>
+
+
+
+
+
+## 6-2. 개요 </br>
+(1) @XToOne 관계는 fetch join등을 활용해 쉽게 최적화 문제를 풀 수 있었다. 그러나 컬렉션 조회(@OneToMany)의 경우 데이터베이스 입장에서는 
+N:M 관계에 있을 때 그만큼 결과 로우 수가 늘어나기 때문에 최적화가 어려운 편이다. </br> </br>
+
+(2) 이러한 부분들을 최적화할 수 있는 방법을 정리힌다. </br> </br> </br> </br> </br>
+
+
+
+
+## 6-3. 
+(1) DTO 내부에 엔티티가 존재하면 안 된다. </br>
+(2) 엔티티를 외부에 노출하지 않고 DTO를 사용한다는 것은 DTO가 엔티티에 대한 의존을 완전히 끊어야 한다는 의미이다. </br> 
+(3) 
+
+
+
+
+
 
