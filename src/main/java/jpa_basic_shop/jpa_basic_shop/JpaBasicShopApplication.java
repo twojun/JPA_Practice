@@ -11,7 +11,10 @@ public class JpaBasicShopApplication {
 		SpringApplication.run(JpaBasicShopApplication.class, args);
 	}
 
-	// JSON으로 가져올 때 LAZY LOADING이 걸린 객체들도 우선 무시하고 가져오는 라이브러리
+	/**
+	 * JSON으로 가져올 때 LAZY LOADING이 걸린 프록시 객체에 대해서도 하이버네이트가
+	 * 제공하는 기능을 사용해 올바르게 직렬화하여 JSON 형태로 데이터를 반환해주는 라이브러리
+	 */
 	@Bean
 	Hibernate5JakartaModule hibernate5Module() {
 		return new Hibernate5JakartaModule();
