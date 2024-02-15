@@ -363,7 +363,7 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
 (1) 최근에는 프론트엔드에서 SPA(Single Page Application) 형식으로 React.js를 통해 View 영역을 개발하고 있다. 이런 경우에는 백엔드 입장에서 뭔가 예전처럼
 서버사이드에서 HTML을 렌더링할 일이 많진 않다. 이러한 작업들은 프론트엔드, 앱 개발 진영에서 해결한다</br>
 
-(2) 모놀리식 아키텍처에서 마이크로서비스 아키텍처로 많이 변화하고, 다양한 클라이언트(프론트엔드, 앱) 원활한 통신, 마이크로서비스 자체 간의 통신 등을 
+(2) Monolithic Architecture(MA)에서 Micro-service Architecture(MSA)로 많이 변화하고, 다양한 클라이언트(프론트엔드, 앱) 원활한 통신, 마이크로서비스 자체 간의 통신 등을 
 위해 최근에는 API로 통신할 일이 더욱 늘어나게 되었다. </br>
 
 (3) 따라서 API를 잘 설계하고 개발하는 것이 중요하다. </br>
@@ -553,7 +553,13 @@ Transactional script(데이터베이스 상의 여러 작업을 묶어 하나의
 
 
 ![image](https://github.com/twojun/JPA_Practice/assets/118627166/b2ab10eb-0d7f-4d5d-83c3-a5852cb6de54)</br>
-(2) 이런 경우 repository 디렉토리 하위에 최적화를 위한 새로운 디렉토리를 생성하고 별도의 클래스를 만든다.</br></br>
+(2) 이런 경우 repository 디렉토리 하위에 최적화를 위한 새로운 디렉토리를 생성하고 별도의 클래스를 만든다.</br>
+
+- 위와 같이 따로 패키지를 나눈 이유?</br>
+- OrderRepository : 순수히 실제 Order 엔티티를 조회하거나 객체 그래프 탐색을 위해 존재하는 Repository</br>
+- OrderSimpleQueryRepository : 특정 영역(화면)이나 특정 API에 설계 및 의존하기 위해 순수 Repository와 분리된 영역(결과적으로 의존관계를 떼어내기 위함이다.)</br>
+- 꼭 Order 엔티티가 아니더라도 비즈니스상 다른 엔티티, 해당 엔티티들을 위한 Repository도 위와 같이 설계하는 것이 좋다.</br></br>
+
 
 
 ![image](https://github.com/twojun/JPA_Practice/assets/118627166/318b3a07-95c1-4ecd-9bd4-0b1ef513d405)</br>
@@ -602,10 +608,260 @@ N:M 관계에 있을 때 그만큼 결과 로우 수가 늘어나기 때문에 �
 
 
 
-## 6-3. 
+
+## 6-3. Value Object(값 타입)외 엔티티들은 DTO에도 노출시키지 않는다.
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/f0916b40-389d-4ae7-bbb2-d7d214baa7ad) </br>
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/7d147f11-bc22-4f66-a3d8-425bcd5723c5) </br>
+
 (1) DTO 내부에 엔티티가 존재하면 안 된다. </br>
-(2) 엔티티를 외부에 노출하지 않고 DTO를 사용한다는 것은 DTO가 엔티티에 대한 의존을 완전히 끊어야 한다는 의미이다. </br> 
-(3) 
+
+(2) 엔티티를 외부에 노출하지 않고 DTO를 사용한다는 것은 DTO가 엔티티에 대한 의존을 완전히 끊어야 한다는 의미이다. </br>
+
+(3) 단순 컬렉션 조회의 경우 지연로딩 특성상 수많은 쿼리가 발생된다. 단순한 어드민 애플리케이션에서는 문제가 되지 않을 수 있으나
+실시간(Real-time), 어느 정도 대규모 및 사용자가 몰릴 수 있는 시스템에서는 성능 문제가 충분히 발생할 수 있다. 이 부분을 해결하기 위한 방법을 확인해 보자.</br></br></br></br></br>
+
+
+
+
+
+## 6-4. 컬렉션 조회 최적화 - fetch join 사용
+
+(1) JPQL에서 distinct는 루트 엔티티의 아이디를 기준으로 중복을 제거시킨다. </br>
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/d666cdff-bebe-4d81-9b20-f4afa8f3f22e)
+- 위처럼 프로젝션 이후에 오는 객체를 루트라고 보통 표현하는데, 루트가 중복인 경우 해당 중복 엔티티를 제외시키고 컬렉션에 담는다.</br></br>
+
+
+(2) 지연 로딩이 설정되었을 때 FETCH JOIN을 통해 쿼리를 최적화시켰다.
+
+    public List<Order> findWithItem() {
+          return em.createQuery(
+                          "select distinct o " +
+                          "from Order o " +
+                          "join fetch o.member m " +
+                          "join fetch o.delivery d " +
+                          "join fetch o.orderItems oi " +
+                          "join fetch oi.item i", Order.class)
+                  .getResultList();
+      }
+
+</br>
+
+      select
+        o1_0.order_id,
+        d1_0.delivery_id,
+        d1_0.city,
+        d1_0.street,
+        d1_0.zipcode,
+        d1_0.status,
+        m1_0.member_id,
+        m1_0.city,
+        m1_0.street,
+        m1_0.zipcode,
+        m1_0.name,
+        o1_0.order_date,
+        oi1_0.order_id,
+        oi1_0.order_item_id,
+        oi1_0.count,
+        i1_0.item_id,
+        i1_0.dtype,
+        i1_0.name,
+        i1_0.price,
+        i1_0.stock_quantity,
+        i1_0.artist,
+        i1_0.etc,
+        i1_0.author,
+        i1_0.isbn,
+        i1_0.actor,
+        i1_0.director,
+        oi1_0.order_price,
+        o1_0.status 
+    from
+        orders o1_0 
+    join
+        member m1_0 
+            on m1_0.member_id=o1_0.member_id 
+    join
+        delivery d1_0 
+            on d1_0.delivery_id=o1_0.delivery_id 
+    join
+        order_item oi1_0 
+            on o1_0.order_id=oi1_0.order_id 
+    join
+        item i1_0 
+            on i1_0.item_id=oi1_0.item_id
+
+(3) 위와 같이 쿼리가 최적회된 것을 확인해 볼 수 있었다.</br>
+(4) fetch join으로 SQL이 1번만 실행됨 </br>
+(5) OneToMany join의 경우 조회되는 데이터베이스 로우 수가 증가한다. JPA의 distinct는 실제 쿼리에 distinct를 추가시켜주고
+아이디 값이 동일한 중복 엔티티에 대해서 중복을 제거시키게 된다. </br></br></br></br></br>
+
+
+
+
+
+## 6-4. @OneToMany 연관관계에서 Collection Fetch join의 심각한 단점
+- 여기까지 봤을 땐 OneToMany 컬렉션 조회에서도 Fetch join을 사용하면 대부분의 문제가 해결되는 것처럼 보인다. </br>
+- 하지만 데이터베이스 제약 조건으로 인해 발생하게 되는 심각한 단점이 하나 존재한다. </br></br></br>
+
+
+(1) 단점 : OneToMany(1:N) 관계에서 fetch join 사용 시 페이징이 불가능하다. </br>
+
+    public List<Order> findWithItem() {
+          return em.createQuery(
+                  "select o " +
+                          "from Order o " +
+                          "join fetch o.member m " +
+                          "join fetch o.delivery d " +
+                          "join fetch o.orderItems oi " +
+                          "join fetch oi.item i", Order.class)
+                  .setFirstResult(0)
+                  .setMaxResults(200)
+                  .getResultList();
+      }
+
+- 위처럼 페이징 JPQL이 작성된 메서드를 호출하게 되면 아래와 같은 문구가 확인된다.</br>
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/de0b1b6f-3ea3-410d-8ec7-62cc34285957)</br>
+위의 경고는 firstResult, maxResults를 컬렉션 fetch join과 함께 사용하면 fetch join 과정에서 사용된 페이징 쿼리는
+실제 페이징되지 않고 메모리 내부에서 페이징 처리를 하게 된다는 경고 메시지이다.</br>
+
+- 데이터의 수가 Hello world 수준으로 적은 수준이라면 당장 문제가 되지 않겠지만 실무에서는 적어도 몇 천개, 많다면 수십 만개의 데이터가
+  애플리케이션 메모리에 로드되어 페이징 처리가 되는 것이다.</br>
+
+- 방대한 양의 데이터를 다루고 있다면 메모리 부하로 인해 서비스 장애가 발생할 수 있다.</br></br></br>
+
+
+
+
+(2) 또한 limit, offset 등 실제 쿼리에서도 페이징 쿼리가 발생하지 않는다.</br>
+- fetch join을 사용하는 경우 연관된 엔티티까지 모두 로드하기 때문에(데이터의 로우 수가 예상한 것보드 많아질 수 있는 문제 발생) 예상되는 페이징 처리 결과를 얻기가 어려울 수 있다.
+  따라서 JPA는 메모리 내부에서 페이징 처리를 하고 실제 쿼리로는 페이징 처리를 하지 않는다.</br>
+
+- 따라서 OneToMany 관계에서 fetch join이 사용되는 경우 페이징을 바로 하면 안 된다 </br>
+
+- Collection fetch join을 사용하면 실제 페이징 처리가 불가능하다. 위와 같이 Hibernate는 경고 로그를 남기면서
+  모든 데이터를 데이터베이스에서 읽어오고 애플리케이션 메모리에서 페이징 처리를 해버리는 문제가 생기기 때문에 매우 위험하다. </br>
+
+- 컬렉션 fetch join은 한 번만 사용한다. </br>
+
+- ManyToOne, OneToOne 상태에서는 페이징 처리를 해도 된다.</br></br></br></br></br>
+
+
+
+
+
+## 6-5. 컬렉션 조회 최적화 - fetch join, 페이징 처리 개요 </br>
+(1) 컬렉션을 fetch join하면 실제로 페이징 처리가 불가능하다. </br>
+- OneToMany 관계에서 1:N join이 발생하게 되어 데이터가 예측할 수 없게 증가한다. </br>
+- 예측이 어려운 이유는 위에서도 잠시 언급되었지만, 페이징의 주체는 1이다. 그러나 컬렉션 fetch join 시, N을 기준으로
+  데이터 로우 수가 N배만큼 증가하게 된다. </br>
+- 따라서 N 관계를 갖는 엔티티를 기준으로 페이징 처리의 기준이 생기게 된다. </br> </br> </br>
+
+
+(2) 따라서 대부분의 페이징 처리 + Collection fetch join을 함께 조회하는 방법을 정리해 보겠다.</br> </br> </br> </br> 
+
+
+
+
+
+## 6-6. XToOne(OneToOne, ManyToOne) 관계에서는 Fetch join 허용, ManyToOne 관계에서는 hibernate.default_batch_fetch_size, @BatchSize를 사용 </br>
+
+    public List<Order> findAllWithMemberDelivery(int offset, int limit) {
+          return em.createQuery(
+                  "select o " +
+                          "from Order o " +
+                          "join fetch o.member m " +  // order -> member(N:1)
+                          "join fetch o.delivery d", Order.class)  // order -> delivery(1:1)
+                  .setFirstResult(offset)
+                  .setMaxResults(limit)
+                  .getResultList();
+      }
+(1) XToOne(OneToOne, ManyToOne) 관계에서는 Fetch join의 결과 로우 수가 영항을 받지 않기 때문에 모두 Fetch join을 적용한다. </br>
+
+(2) 컬렉션은 지연 로딩으로 조회한다.</br>
+
+(3) 지연 로딩의 성능 최적화를 위해 hibernate.default_batch_fetch_size, @BatchSize를 사용한다.</br></br></br></br>
+
+
+
+(4) hibernate.default_batch_fetch_size : Global settings (상황에 따라 다르긴 하지만 대부분 글로벌 설정을 적용시킨다.)</br>
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/fca1f6dc-969e-4c55-8c36-618dd099674e)</br>
+- application.yml 기준으로 위와 같이 batch size를 줄 수 있다.</br></br>
+
+
+(5) hibernate.default_batch_fetch_size : Entity settings</br>
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/7cc668f9-2faa-4786-9e63-fe98abc2b875)</br>
+- 컬렉션 엔티티에 개별적으로 적용</br></br>
+
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/b9b22d88-9689-40f3-baf7-12baadeced70)</br>
+- 만약 ManyToOne(N:1) 단일 엔티티에 적용시켜야 한다면 해당 레퍼런스 변수에 주는 것이 아닌</br>
+
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/eac61c9d-fa6c-44bb-91d4-b9964fd6f1ff)</br>
+- 위와 같이 엔티티 상단에 직접 적용시킨다.</br></br></br>
+
+
+(6) 핵심은 해당 옵션을 사용하게 되면 컬렉션(OneToMany)이나 프록시 객체를 조회할 때 설정된 Batch size만큼 in 쿼리를 통해 한 번에 조회하게 된다. 
+
+     /**
+       * V3.1 : Entity -> DTO : fetch join, paging(Batch size 사용)
+       */
+      @GetMapping("/api/v3.1/orders")
+      public List<OrderDto> orderV3Page(@RequestParam(value = "offset", defaultValue = "0") int offset,
+                                        @RequestParam(value = "limit", defaultValue = "100") int limit ) {
+          List<Order> orders = orderRepository.findAllWithMemberDelivery(offset, limit);
+  
+          return orders.stream()
+                  .map(order -> new OrderDto(order))
+                  .collect(Collectors.toList());
+      }
+- 해당 메서드를 호출하면 페이징된 SQL을 보내게 된다.</br></br>
+
+
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/3b01178f-2a93-4936-a884-eec8d3ba9c21)</br>
+- Fetch join이 적용된 Member, Delivery 엔티티의 경우 order와 각각 ManyToOne, OneToOne(N:1, 1:1 - XToOne) 실제 조회되는 조회 로우 수가
+  N쪽에 의해 증가하는 영향을 받지 않기 때문에 페이징 처리에 있어 영향을 받지 않는다. </br>
+
+- 이후 OrderItem은 별도로 fetch join이 명시되어 있지 않기 때문에 지연 로딩을 통해 프록시 객체로 조회된다. </br>
+
+- 이후 OrderItem이 실제로 사용될 때 해당 엔티티 개수대로 hibernate.default_batch_fetch_size 옵션에 의해 실제 in 쿼리를 날려서 batch size만큼 데이터를 끌어온다.</br>
+
+- OrderItem 내부에 존재하는 엔티티들에 대해서도 해당 엔티티 개수대로 batch size만큼 데이터를 가져온다.</br>
+
+- 만약 특정 엔티티의 데이터 개수가 1,000개이고 batch_size = 100라면, 모든 데이터를 끌고 오기 위해 in 쿼리가 10번 발생된다.</br>
+
+- 해당 방식은 fetch join과 비교 시 쿼리 호출 수가 조금 증가하지만 쿼리에 대한 실질적인 데이터베이스 전송량이 감소한다는 장점이 있다. </br>
+
+- 컬렉션 Fetch join의 경우 페이징 처리가 불가능하지만 batch_size 방법을 활용환 최적화에서는 페이징 처리가 가능하다. </br> </br> </br>
+
+
+(7) 결론 </br>
+- XToOne 연관관계는 fetch join을 해도 페이징에 영향을 받지 않는다. </br>
+- 따라서 XToOne 관계는 fetch join을 사용해서 성능 최적화를 하고, 나머지는 hibernate.default_batch_fetch_size를 사용해서 최적화한다. 
+- 보통 fetch size 옵션은 글로벌로 설정하는 것이 편리하다. </br></br></br></br></br>
+
+
+
+
+## 6-7. 참고 : hibernate.default_batch_fetch_size의 크기는 얼마나 줘야 할까? </br>
+(1) 사이즈의 경우 최댓값은 1000이지만 최솟값에는 제한이 없다 (0~1000)</br>
+
+(2) 데이터베이스 벤더사마다 in 쿼리의 제한이 있을 수 있으므로 이 부분을 확인하고 size를 결정한다. </br>
+
+(2) WAS, 데이터베이스가 버틸 수 있다면 size를 크게 잡아도 되지만 만약 이 부분에 대해 순간적인 성능 부하 부담이 있다면
+초기에 100 정도로 잡아두고 사용해 보면서 상황에 따라 천천히 늘려가는 방법도 고민해 볼 수 있다. </br></br></br></br></br></br></br>
+
+
+
+
+
+
+# 7. JPA에서 DTO로 바로 조회(컬렉션 조회) </br>
+## 7-1. 
+
+
+
+
+
+
 
 
 
