@@ -830,7 +830,7 @@ N:M 관계에 있을 때 그만큼 결과 로우 수가 늘어나기 때문에 �
 
 - 해당 방식은 fetch join과 비교 시 쿼리 호출 수가 조금 증가하지만 쿼리에 대한 실질적인 데이터베이스 전송량이 감소한다는 장점이 있다. </br>
 
-- 컬렉션 Fetch join의 경우 페이징 처리가 불가능하지만 batch_size 방법을 활용환 최적화에서는 페이징 처리가 가능하다. </br> </br> </br>
+- 컬렉션 Fetch join의 경우 페이징 처리가 불가능하지만 batch_size 방법을 활용한 최적화에서는 페이징 처리가 가능하다. </br> </br> </br>
 
 
 (7) 결론 </br>
@@ -854,11 +854,384 @@ N:M 관계에 있을 때 그만큼 결과 로우 수가 늘어나기 때문에 �
 
 
 
-# 7. JPA에서 DTO로 바로 조회(컬렉션 조회) </br>
-## 7-1. 
+# 7. JPA에서 DTO로 바로 조회 (컬렉션 조회) </br>
+## 7-1. 컬렉션 조회
+
+     /**
+       * V4 : JPA에서 DTO로 바로 조회(Collection)
+       */
+      @GetMapping("/api/v4/orders")
+      public List<OrderQueryDto> ordersV4() {
+          return orderQueryRepository.findOrderQueryDto();
+      }
+ </br>
+
+     public List<OrderQueryDto> findOrderQueryDto() {
+          List<OrderQueryDto> result = findOrders();
+  
+          result.forEach(order -> {
+              List<OrderItemQueryDto> orderItems = findOrderItems(order.getOrderId());
+              order.setOrderItems(orderItems);
+          });
+  
+          return result;
+      }
+  
+      private List<OrderItemQueryDto> findOrderItems(Long orderId) {
+          return em.createQuery(
+                          "select new jpa_basic_shop.jpa_basic_shop.dto.OrderItemQueryDto(oi.order.id, i.name, oi.orderPrice, oi.count) " +
+                                  "from OrderItem oi " +
+                                  "join oi.item i " +
+                                  "where oi.order.id = :orderId", OrderItemQueryDto.class)
+                  .setParameter("orderId", orderId)
+                  .getResultList();
+      }
+  
+      private List<OrderQueryDto> findOrders() {
+          return em.createQuery(
+                          "select new jpa_basic_shop.jpa_basic_shop.dto.OrderQueryDto(o.id, m.name, o.orderDate, o.status, d.address) " +
+                                  "from Order o " +
+                                  "join o.member m " +
+                                  "join o.delivery d", OrderQueryDto.class)
+                  .getResultList();
+      }
+
+ </br>
+(1) 루트 프로젝션(Order)의 경우 1번, 컬렉션은 n번 실행되었다. </br> </br>
+
+(2) XToOne 관계들을 먼저 조회하고 OneToMany 관계는 각각 별도로 처리  </br>
+- 위와 같이 처리되는 이유는 우선 XToOne 관계는 조회 데이터 로우 수가 급격히 증가하지 않는다. </br>
+- 하지만 OneToMany 관계는 조인 시 로우 수가 증가하게 된다.  </br> </br>
+
+(3) 로우 수가 증가하지 않는 XToOne 관계는 조인으로 한 번에 조회, OneToMany 관계는 최적화가 어려우므로 
+findOrderItems()와 같은 메서드로 별도 조회한다. </br> </br> </br> </br> </br> 
 
 
 
+
+## 7-2. 쿼리 조회 결과</br>
+
+     select
+          o1_0.order_id,
+          m1_0.name,
+          o1_0.order_date,
+          o1_0.status,
+          d1_0.city,
+          d1_0.street,
+          d1_0.zipcode 
+      from
+          orders o1_0 
+      join
+          member m1_0 
+              on m1_0.member_id=o1_0.member_id 
+      join
+          delivery d1_0 
+              on d1_0.delivery_id=o1_0.delivery_id
+
+
+    select
+          oi1_0.order_id,
+          i1_0.name,
+          oi1_0.order_price,
+          oi1_0.count 
+      from
+          order_item oi1_0 
+      join
+          item i1_0 
+              on i1_0.item_id=oi1_0.item_id 
+      where
+          oi1_0.order_id=?
+
+
+     select
+          oi1_0.order_id,
+          i1_0.name,
+          oi1_0.order_price,
+          oi1_0.count 
+      from
+          order_item oi1_0 
+      join
+          item i1_0 
+              on i1_0.item_id=oi1_0.item_id 
+      where
+          oi1_0.order_id=?
+
+(1) 총 Order 1번, OrderItem -> Item (ManyToOne) 2번 </br>
+(2) 이 부분에서도 order를 가져오기 위해 총 2번의 추가 쿼리가 발생된 N+1 문제가 발생한 것을 확인할 수 있다. </br>
+(3) 이 부분을 최적화하는 방법을 확인해 보자 </br></br></br></br></br></br></br>
+
+
+
+
+
+
+
+# 8. JPA에서 DTO로 직접 조회 - 컬렉션 조회 최적화 (N + 1 문제 해결)</br>
+## 8-1. 컬렉션 조회 최적화</br>
+
+    /**
+       * V5 : JPA에서 DTO로 바로 조회(Collection) - N+1 문제 최적화
+       */
+      @GetMapping("/api/v5/orders")
+      public List<OrderQueryDto> ordersV5() {
+          return orderQueryRepository.isOptimizeFindAllByDto();
+      }
+
+
+    public List<OrderQueryDto> isOptimizeFindAllByDto() {
+        List<OrderQueryDto> result = findOrders();   /** Order -> Member, Order -> Delivery 조회 */
+        List<Long> orderIds = toOrderIds(result);
+
+        Map<Long, List<OrderItemQueryDto>> orderItemMap = findOrderItemMap(orderIds);  /** OrderItem join Item on oi_item_id = i_item_id */
+
+        result.forEach(order -> order.setOrderItems(orderItemMap.get(order.getOrderId())));    /** 각각의 OrderItem 루프를 돌며 orderId를 가져온다. */
+        return result;
+    }
+
+    private List<OrderQueryDto> findOrders() {
+        return em.createQuery(
+                        "select new jpa_basic_shop.jpa_basic_shop.dto.OrderQueryDto(o.id, m.name, o.orderDate, o.status, d.address) " +
+                                "from Order o " +
+                                "join o.member m " +
+                                "join o.delivery d", OrderQueryDto.class)
+                .getResultList();
+    }
+
+     private static List<Long> toOrderIds(List<OrderQueryDto> result) {
+        List<Long> orderIds = result.stream()
+                .map(order -> order.getOrderId())
+                .collect(Collectors.toList());
+        return orderIds;
+    }
+
+
+    private Map<Long, List<OrderItemQueryDto>> findOrderItemMap(List<Long> orderIds) {
+        List<OrderItemQueryDto> orderItems = em.createQuery(
+                        "select new jpa_basic_shop.jpa_basic_shop.dto.OrderItemQueryDto(oi.order.id, i.name, oi.orderPrice, oi.count) " +
+                                "from OrderItem oi " +
+                                "join oi.item i " +
+                                "where oi.order.id in :orderIds", OrderItemQueryDto.class)
+                .setParameter("orderIds", orderIds)
+                .getResultList();
+
+        Map<Long, List<OrderItemQueryDto>> orderItemMap = orderItems.stream()
+                .collect(Collectors.groupingBy(orderItemQueryDto -> orderItemQueryDto.getOrderId()));
+        return orderItemMap;
+    }
+
+</br>
+
+<수행 쿼리 결과>
+
+    select
+          o1_0.order_id,
+          m1_0.name,
+          o1_0.order_date,
+          o1_0.status,
+          d1_0.city,
+          d1_0.street,
+          d1_0.zipcode 
+      from
+          orders o1_0 
+      join
+          member m1_0 
+              on m1_0.member_id=o1_0.member_id 
+      join
+          delivery d1_0 
+              on d1_0.delivery_id=o1_0.delivery_id
+
+      select
+        oi1_0.order_id,
+        i1_0.name,
+        oi1_0.order_price,
+        oi1_0.count 
+      from
+          order_item oi1_0 
+      join
+          item i1_0 
+              on i1_0.item_id=oi1_0.item_id 
+      where
+          oi1_0.order_id in (?, ?)
+</br>
+(1) 쿼리의 경우 루트 프로젝션(Order) 1번, Collection(OrderItem) 1번으로 총 2번의 쿼리가 실행되었다.</br>
+
+(2) 코드를 보면, ToOne 관계를 우선적으로 조회하고 이 과정에서 얻은 식별자(orderIds)를 통해 컬렉션인 OrderItem을 한 번에 조회한다. 이때 in절을 사용해 OrderItem의 개수만큼 OrderItem을 한 번에 조회했다.</br>
+
+(3) 현재 보면 직접 JPQL을 써서 DTO로 조회하는 부분이 마냥 편하지만은 않다는 생각이 든다. 약간의 트레이드 오프가 존재하는데 이전에 fetch join보다는
+코드는 훨씬 길지만 프로젝션 절에 들어가는 데이터의 양이 훨씬 줄어든 것을 볼 수 있다. </br> </br> </br> </br> </br> </br> </br>
+
+
+
+
+
+
+
+# 9. JPA에서 DTO로 직접 조회 - 컬렉션 조회 (플랫 데이터 최적화) 쿼리 1회 발생</br>
+## 9-1. 플랫 데이터 최적화</br>
+
+    /**
+       * V6 : JPA에서 DTO로 바로 조회(Collection) - 플랫 데이터 최적화
+       */
+      @GetMapping("/api/v6/orders")
+      public List<OrderQueryDto> ordersV6() {
+          List<OrderFlatDto> flats = orderQueryRepository.findAllByDtoWithFlat();
+  
+          return flats.stream()
+                  .collect(Collectors.groupingBy(o -> new OrderQueryDto(
+                                  o.getOrderId(),
+                                  o.getName(),
+                                  o.getOrderDate(),
+                                  o.getOrderStatus(),
+                                  o.getAddress()),
+                          Collectors.mapping(o -> new OrderItemQueryDto(
+                                          o.getOrderId(),
+                                          o.getItemName(),
+                                          o.getOrderPrice(),
+                                          o.getCount()),
+                                  Collectors.toList())))
+                  .entrySet().stream()
+                  .map(e -> new OrderQueryDto(
+                          e.getKey().getOrderId(),
+                          e.getKey().getName(),
+                          e.getKey().getOrderDate(),
+                          e.getKey().getOrderStatus(),
+                          e.getKey().getAddress(),
+                          e.getValue()))
+                  .collect(toList());
+      }
+
+
+    public List<OrderFlatDto> findAllByDtoWithFlat() {
+        return em.createQuery(
+                        "select new jpa_basic_shop.jpa_basic_shop.dto.OrderFlatDto(" +
+                                "o.id, " +
+                                "m.name, " +
+                                "o.orderDate," +
+                                " o.status, " +
+                                "d.address, " +
+                                "i.name, " +
+                                "oi.orderPrice, " +
+                                "oi.count)" +
+                                "from Order o " +
+                                "join o.member m " +
+                                "join o.delivery d " +
+                                "join o.orderItems oi " +
+                                "join oi.item i", OrderFlatDto.class)
+                .getResultList();
+    }
+</br>
+(실행된 쿼리) </br>
+
+    select
+          o1_0.order_id,
+          m1_0.name,
+          o1_0.order_date,
+          o1_0.status,
+          d1_0.city,
+          d1_0.street,
+          d1_0.zipcode,
+          i1_0.name,
+          oi1_0.order_price,
+          oi1_0.count 
+      from
+          orders o1_0 
+      join
+          member m1_0 
+              on m1_0.member_id=o1_0.member_id 
+      join
+          delivery d1_0 
+              on d1_0.delivery_id=o1_0.delivery_id 
+      join
+          order_item oi1_0 
+              on o1_0.order_id=oi1_0.order_id 
+      join
+          item i1_0 
+              on i1_0.item_id=oi1_0.item_id
+</br>
+
+(1) 총 한 번의 쿼리로 원하는 데이터를 최적화해서 가져온다. </br>
+
+(2) 쿼리는 한 번이지만 여러 번의 조인으로 인해 데이터베이스에서 애플리케이션으로 전달하는 중복 데이터가 추가되므로 상황에 따라서는
+이전 방식보다 더 느릴 수도 있다.</br>
+
+(3) OneToMany join으로 인해 페이징이 불가능하다. </br></br></br></br></br></br></br>
+
+
+
+
+
+
+# 10. 지연 로딩에서의 조회 성능 최적화, 컬렉션 조회 최적화 정리</br>
+## 10-1. 점진적으로 확인해본 최적화 방법 : 엔티티 조회 및 DTO로 변환 후 조회</br>
+- 엔티티를 조회해서 그대로 반환 ->  엔티티에서 DTO로 변환 ->  fetch join을 활용해 쿼리 최적화 ->  OneToMany에서의 컬렉션 페이징 </br></br>
+
+(1) 컬렉션 페이징에서 문제를 확인해 볼 수 있었다. 바로 페이징 처리가 불가능하다는 것.</br>
+(2) XTonOne 연관관계의 경우 fetch join으로 쿼리 수를 최적화한다.</br>
+(3) OneToMany 컬렉션의 경우 LAZY를 적용하고 hibernate.default_batch_fetch_size 또는 @BatchSize로 최적화</br></br></br></br></br>
+
+
+ 
+ ## 10-2. JPA에서 DTO 직접 조회 </br>
+- JPA에서 DTO 직접 조회(컬렉션 조회, 플랫 데이터 최적화)</br></br>
+ 
+- 컬렉션 조회 최적화 : OneToMany 관계의 컬렉션은 in절을 활용해서 메모리에 미리 조회해놓고 최적화한다. </br>
+- 플랫 데이터 최적화 : join 결과를 그대로 조회한 후, 애플리케이션 레벨에서 원하는 형태로 변형 </br></br></br></br></br>
+
+
+
+
+## 10-3. 처리 순서 </br>
+(1) 엔티티로 조회해서 이후 DTO로 변환하는 방법을 우선적으로 접근 </br>
+
+(2) 이후 fetch join으로 쿼리 수를 최적화한다. </br>
+
+(3) 만약 컬렉션이 존재하는 경우 : 페이징이 필요한 경우에 hibernate.default_batch_fetch_size 또는 @BatchSize로 최적화한다, 페이징이 필요없다면 fetch join을 사용한다. </br>
+
+(4) (1) - (3)까지 엔티티 -> DTO 변환 조회 방식으로 해결되지 않는 경우 DTO 조회 방식을 사용한다. </br>
+
+(5) DTO 조회 방식으로도 해결되지 않는다면 Native SQL, Spring JDBCTemplate을 사용한다. </br></br>
+
+
+(6) 엔티티 조회 접근 방식을 추천하는 이유 : 엔티티 조회 방식의 경우 fetch join이나 hibernate.default_batch_fetch_size 또는 @BatchSize 같이 코드를 거의 수정하지 않고
+일부 옵션만 변경해서 다양한 성능 최적화 시도가 가능하다. 하지만 DTO 직접 조회 방식의 경우 성능 최적화 시 많은 코드 변경이 따르게 된다.</br></br></br></br></br>
+
+
+
+
+
+## 10-4. 성능 최적화와 코드 복잡도 사이의 트레이드 오프</br>
+(1) 모든 경우가 그런 것은 아니지만, 일반적인 성능 최적화의 경우 기존에 단순했던 코드를 복잡하게 몰고갈 수 있다.</br>
+
+(2) 엔티티 조회(조회 후 DTO 변환) 방식은 JPA가 많은 부분을 최적화해 주기 때문에 단순한 코드를 대체적으로 유지하면서 성능 최적화가 가능했다. </br>
+
+(3) 하지만 DTO 조회 방식의 경우 SQL을 직접 다루는 부분과 패턴이 유사하기 때문에 기존 코드를 복잡하게 몰고갈 수 있다.</br></br></br>
+
+
+(4) 앞서 작성된 V4 코드의 경우 코드가 단순하고 유지보수가 쉽다는 특징이 있기 때문에 단건 조회의 경우 V4 방식을 생각해 볼 수 있다. </br>
+
+(5) V5의 특징을 살펴보면 우선 V4는 연관된 엔티티 n개 필요할 때, 추가적인 쿼리가 n번 발생된다. v5는 이 부분의 문제를 해결해 줌으로써
+연관된 엔티티를 가져올 때 한 번에 메모리에 가지고 올라와서 루트 프로젝션을 조회하는 쿼리 1번, 연관된 엔티티를 모두 가져오는 쿼리 1번으로 총 2번의 
+쿼리가 발생됐다. 쿼리의 수를 최적화해 줬지만 코드 복잡도가 증가한 것을 알 수 있다. 지금은 단순히 Hello World 예제 수준의 데이터셋으로 큰 차이를 못 느끼지만
+실무에서 만약 주문수가 1,000개였다고 가정해보자. V4의 경우 주문은 한 번의 쿼리로 모두 가져오지만 각각의 주문상품에 대한 쿼리를 1,000번 추가적으로 더 날려서 N+1
+문제를 일으키지만 V5의 경우 주문 1번, 주문 상품 1번 총 2번의 쿼리를 보냄으로써 상당한 성능 최적화를 가져온 것을 알 수 있다.</br>
+
+(6) 마지막 V6은 접근방식부터가 다르다. 최종적으로 쿼리가 1번만 발생되어 좋아보이지만, Order를 기준으로 페이징 처리가 불가능하다. 실무에서는 
+보통 페이징이 필요하기 때문에 채택하기 어려운 최적화 방법이다.</br></br></br></br></br></br></br>
+
+
+
+
+
+
+
+# 11. 실무에서의 필수 최적화 : OSIV(Open Session In View)와 성능 최적화 </br>
+## 11-1. OSIV </br>
+(1) JPA에서 Persistence context(엔티티의 라이프사이클 관리)를 관리하고 데이터베이스와 상호작용, 트랜잭션 관리 등 핵심 역할을 수행하는 인터페이스를
+Entity Manager(엔티티 매니저)라고 불렀다. 하지만 JPA가 표준화되기 전 하이버네이트만 사용될 때는 이러한 엔티티 매니저를 Session(세션)이라고 불렀다. </br>
+
+(2) Open Session In View : Hibernate  / Open EntityManager In View : JPA, 관례상 OSIV라고 다들 부르고 있다.</br>
+
+(3) 트래픽이 조금이라도 몰리는 프로덕션을 개발하고 운영 및 관리를 하고 있다면, OSIV를 충분히 이해하고 있어야 한다.
 
 
 
