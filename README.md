@@ -1,3 +1,5 @@
+[JPA를 공부하며 정리한 Repository입니다. 잘못 작성된 부분이 있다면 별도로 수정하겠으며 학습했던 내용에 대해 새롭게 알게 된 부분에 대해서는 추가 커밋 예정입니다.] </br></br>
+
 # 1. 엔티티 설계, 주의사항 </br> 
 ## 1-1. 외래 키를 보유한 곳을 연관관계의 주인으로 설정한다.</br>
 (1) Reference : https://github.com/twojun/ex1-hello-jpa</br></br></br></br></br>
@@ -1225,19 +1227,98 @@ findOrderItems()와 같은 메서드로 별도 조회한다. </br> </br> </br> <
 
 
 # 11. 실무에서의 필수 최적화 : OSIV(Open Session In View)와 성능 최적화 </br>
-## 11-1. OSIV </br>
+## 11-1. OSIV(Open Session In View) </br>
 (1) JPA에서 Persistence context(엔티티의 라이프사이클 관리)를 관리하고 데이터베이스와 상호작용, 트랜잭션 관리 등 핵심 역할을 수행하는 인터페이스를
 Entity Manager(엔티티 매니저)라고 불렀다. 하지만 JPA가 표준화되기 전 하이버네이트만 사용될 때는 이러한 엔티티 매니저를 Session(세션)이라고 불렀다. </br>
 
-(2) Open Session In View : Hibernate  / Open EntityManager In View : JPA, 관례상 OSIV라고 다들 부르고 있다.</br>
+(2) Open Session In View : Hibernate  / Open EntityManager In View : JPA, 관례상 OSIV라고 다들 부르고 있다.</br></br>
 
-(3) 트래픽이 조금이라도 몰리는 프로덕션을 개발하고 운영 및 관리를 하고 있다면, OSIV를 충분히 이해하고 있어야 한다.
+(3) OSIV는 API를 반환한다면 반환할 때까지, 서버사이드에서 html을 렌더링한다고 하면 렌더링할 때까지(완전히 응답이 나갈 때까지), 
+트랜잭션이 종료되더라도 영속성 컨텍스트, 데이터베이스 커넥션을 끝까지 가지고 있는 속성을 의미한다.</br>
 
-
-
-
-
+(4) 트래픽이 조금이라도 몰리는 프로덕션을 개발하고 운영 및 관리를 하고 있다면, OSIV를 충분히 이해하고 있어야 한다.</br></br></br></br></br>
 
 
 
 
+## 11-2. OSIV ON </br>
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/e89836ac-3c2d-49b1-bc51-71de92b6ebdf)</br>
+<이미지 출처 : 김영한님의 Java ORM 표준 JPA 프로그래밍></br></br>
+
+
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/a980a556-7d10-45b5-aa1f-df759ba19195)</br>
+(1) 우선 스프링 부트를 JPA와 함께 실행시키면 위와 같은 WARN 로그가 남는다.</br>
+- spring.jpa.open-in-view : true (default)</br></br>
+
+
+(2) 기본적으로 JPA가 데이터베이스 커넥션 가져오고 반납할까?</br>
+- JPA는 영속성 컨텍스트를 동작시키기 위해 데이터베이스 커넥션을 사용해야 한다. 영속성 컨텍스트와 데이터베이스 커넥션은 밀접하게 매칭되어 있다.</br>
+- 영속성 컨텍스트의 기능들은 데이터베이스 커넥션을 1:1로 가져오면서 사용할 수 있게 된다. </br>
+- 데이터베이스 커넥션 획득 시점은, 기본적으로 서비스 계층에서 데이터베이스 트랜잭션을 시작할 때 얻는다. 그리고 OSIV가 기본값으로 켜져 있으면,
+트랜잭션이 이미 끝났더라도 위에서 언급한 것처럼 응답 결과가 클라이언트측으로 던져질 때까지 커넥션, 영속성 컨텍스트를 계속 유지하는 전략이다. </br></br>
+
+
+(3) LAZY LOADING은 영속성 컨텍스트가 존재해야 가능하고 영속성 컨텍스트는 기본적으로 데이터베이스 커넥션을 유지한다. api 컨트롤러에서 지연 로딩이 가능했던 것이다.</br>
+
+(4) 하지만 OSIV ON 전략은 치명적인 단점이 한 가지 존재한다. </br>
+
+(5) 바로 너무 오랜 시간동안 커넥션 리소스를 사용하기 때문에 실시간 트래픽이 중요한 도메인에서는 커넥션 풀에서 가져다가 사용할 커넥션이 모자라는 문제가 생길 수도 있다. 
+이 부분은 위와 같은 도메인에서는 서비스 장애로 이어질 수 있다. </br></br></br></br></br>
+
+
+
+
+
+## 11-3. OSIV OFF </br>
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/4c7e16ba-d94b-4f8b-a2ce-4a5f6ae6d9ce) </br>
+- spring.jpa.open-in-view : false </br></br>
+
+(1) OSIV OFF 전략은 반대로 트랜잭션이 종료되면 영속성 컨텍스트를 종료하고 커넥션 풀에서 가져왔던 데이터베이스 커넥션도 반납한다. </br>
+
+(2) OFF 전략도 단점이 존재한다. 모든 지연 로딩을 트랜잭션 내부에서 처리해야 한다. 따라서 OSIV를 끈 상태에서는 위의 그림처럼
+지연 로딩을 영속성 컨텍스트의 라이프 사이클이 살아있는 범위 내에서 모두 처리해야 한다.</br>
+
+(3) 지금까지 작성된 많은 코드가 트랜잭션을 컨트롤러 레벨에서 처리해 준 것도 많다. 결론적으로 트랜잭션이 종료되기 전에 지연 로딩을
+강제로 호출해 두어야 하는 문제가 있다. 참고로 보통 서비스 계층에 선언적 트랜잭션(Declarative Transaction, @Transactional)을 적용해 주어 트랜잭션을 관리하는 경우가 많다.
+일반적으로 비즈니스 로직을 담고 있는 서비스 계층의 메소드와 결합시키는 것이 좋다. 이유는 Repository(DAO)로부터 읽어온 데이터를 사용하고 변경하는 등의 
+작업을 수행하는 곳이 서비스 계층이기 떄문이다. </br></br>
+
+(4) 해당 옵션을 끄고 Repository, Service Layer를 벗어난 곳에서 지연로딩을 할 경우 예외가 발생하는데 이 부분을 확인해 보자</br></br>
+
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/004f9969-c693-4797-b4ee-2dcfc67ab3d5)</br>
+- 우선 위와 같이 open-in-view를 꺼둔다.</br>
+
+
+       /**
+         * V3.1 : Entity -> DTO : fetch join, paging(Batch size 사용)
+         */
+        @GetMapping("/api/v3.1/orders")
+        public List<OrderDto> orderV3Page(@RequestParam(value = "offset", defaultValue = "0") int offset,
+                                          @RequestParam(value = "limit", defaultValue = "100") int limit) {
+            List<Order> orders = orderRepository.findAllWithMemberDelivery(offset, limit);
+    
+            return orders.stream()
+                    .map(order -> new OrderDto(order))
+                    .collect(Collectors.toList());
+        }
+
+- 위의 메서드를 호출하게 되면 아래와 같은 LazyInitializationException 예외가 터지게 된다. 이 부분을 어떻게 해결할까?
+![image](https://github.com/twojun/JPA_Practice/assets/118627166/4c2d8492-3bb0-4b51-b003-7d4429acdb7b) </br>
+(OrderItem이 LAZY이기 때문에 프록시를 초기화해서 실제 값을 가져오려는 과정에서 프록시를 초기화 할 수 없다는 메시지)</br></br></br></br></br>
+
+
+
+
+
+
+## 11-4. 해결 방법 </br>
+- 일반적으로 엔티티 몇 개를 수정하거나 등록하는 것은 성능상 크게 문제되지 않음 </br>
+- 문제는 복잡한 화면이나 api를 반환하기 위한 쿼리는 해당 스펙에 맞추어 최적화가 필요 </br>
+- 규모 있고 큰 서비스를 개발한다면 이 둘의 관심사를 명확하게 분리하는 것은 유지보수 관점에서 크게 도움이 되기 때문에
+  아래와 같이 분리가 가능하다면 분리하는 것이다. </br></br>
+
+- 예를 들어 주문 서비스에 대해서
+(1) OrderService : 핵심 비즈니스 로직이 담겨있는 계층</br>
+(2) OrderQueryService : 특정 화면이나 api에 맞춘 서비스(주로 읽기 전용 선언적 트랜잭션 사용)</br></br>
+
+(3) 트래픽이 몰리는 실시간 서비스에서는 OSIV OFF를 하고 어드민처럼 많은 커넥션을 필요로 하지 않는 영역에선 OSIV를 ON으로 설정한다.
