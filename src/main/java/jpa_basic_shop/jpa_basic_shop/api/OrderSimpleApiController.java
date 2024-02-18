@@ -6,7 +6,7 @@ import jpa_basic_shop.jpa_basic_shop.dto.SimpleOrderDto;
 import jpa_basic_shop.jpa_basic_shop.repository.OrderRepository;
 import jpa_basic_shop.jpa_basic_shop.repository.OrderSearch;
 
-import jpa_basic_shop.jpa_basic_shop.repository.order.simplequery.OrderSimpleQueryRepository;
+import jpa_basic_shop.jpa_basic_shop.repository.order.query.OrderSimpleQueryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,8 +17,8 @@ import java.util.stream.Collectors;
 /**
  * @XToOne
  * order 조회
- * order -> member
- * order -> delivery
+ * order -> member (ManyToOne)
+ * order -> delivery (OneToOne)
  */
 @RestController
 @RequiredArgsConstructor

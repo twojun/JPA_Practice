@@ -1,8 +1,6 @@
 package jpa_basic_shop.jpa_basic_shop.domain;
 
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import jpa_basic_shop.jpa_basic_shop.domain.item.Item;
 import lombok.AccessLevel;

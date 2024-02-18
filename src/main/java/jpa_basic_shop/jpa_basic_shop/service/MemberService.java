@@ -41,7 +41,7 @@ public class MemberService {
     }
 
     public Member findOne(Long id) {
-        return memberRepository.findOne(id);
+        return memberRepository.findById(id).get();
     }
 
     /**
@@ -49,7 +49,7 @@ public class MemberService {
      */
     @Transactional
     public void update(Long memberId, String name) {
-        Member findMember = memberRepository.findOne(memberId);
+        Member findMember = memberRepository.findById(memberId).get();
         findMember.changeMemberName(name);
     }
 }

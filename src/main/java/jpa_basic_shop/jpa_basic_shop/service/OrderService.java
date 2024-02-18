@@ -5,10 +5,7 @@ import jpa_basic_shop.jpa_basic_shop.domain.Member;
 import jpa_basic_shop.jpa_basic_shop.domain.Order;
 import jpa_basic_shop.jpa_basic_shop.domain.OrderItem;
 import jpa_basic_shop.jpa_basic_shop.domain.item.Item;
-import jpa_basic_shop.jpa_basic_shop.repository.ItemRepository;
-import jpa_basic_shop.jpa_basic_shop.repository.MemberRepository;
-import jpa_basic_shop.jpa_basic_shop.repository.OrderRepository;
-import jpa_basic_shop.jpa_basic_shop.repository.OrderSearch;
+import jpa_basic_shop.jpa_basic_shop.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +27,7 @@ public class OrderService {
     @Transactional
     public Long order(Long memberId, Long itemId, int count) {
         // 주문자, 관련 상품 (엔티티) 조회
-        Member member = memberRepository.findOne(memberId);
+        Member member = memberRepository.findById(memberId).get();
         Item item = itemRepository.findOne(itemId);
 
         // 배송정보 생성
@@ -64,6 +61,6 @@ public class OrderService {
      * 주문 검색
      */
     public List<Order> findOrders(OrderSearch orderSearch) {
-        return orderRepository.findAllByString(orderSearch);
+        return orderRepository.findAll(orderSearch);
     }
 }

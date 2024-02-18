@@ -1,14 +1,13 @@
 package jpa_basic_shop.jpa_basic_shop.service;
 
 import jpa_basic_shop.jpa_basic_shop.domain.Member;
-import jpa_basic_shop.jpa_basic_shop.repository.MemberRepository;
+import jpa_basic_shop.jpa_basic_shop.repository.NoSpringDataJpaMemberRepository;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
-import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest
 @Transactional
 class MemberServiceTest {
@@ -17,7 +16,7 @@ class MemberServiceTest {
     MemberService memberService;
 
     @Autowired
-    MemberRepository memberRepository;
+    NoSpringDataJpaMemberRepository memberRepository;
 
     @Test
     public void 회원가입() throws Exception {
